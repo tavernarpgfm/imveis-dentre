@@ -1,7 +1,5 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
   ArrowLeft,
@@ -10,16 +8,32 @@ import {
   Clock,
   GraduationCap,
   LogOut,
-  Star,
   Users,
 } from "lucide-react";
-import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { coursesService } from "@/lib/supabase-service";
+import type { CourseRow } from "@/lib/supabase-service";
 
 export default function CoursesPage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const courses = useQuery(api.courses.listCourses, {});
+  const [courses, setCourses] = useState<CourseRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadCourses() {
+      try {
+        const data = await coursesService.listCourses({});
+        setCourses(data);
+      } catch (err) {
+        console.error("Error loading courses:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadCourses();
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -64,10 +78,10 @@ export default function CoursesPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          {courses && courses.length > 0 ? (
+          {courses.length > 0 ? (
             courses.map((course) => (
               <div
-                key={course._id}
+                key={course.id}
                 className="border-3 border-foreground bg-card shadow-[4px_4px_0px_0px] shadow-foreground hover:shadow-[6px_6px_0px_0px] hover:shadow-foreground transition-shadow"
               >
                 <div className="h-3 bg-primary" />
@@ -86,13 +100,13 @@ export default function CoursesPage() {
                   <div className="flex flex-wrap gap-3 text-xs font-bold text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {course.durationHours}h
+                      {course.duration_hours}h
                     </span>
                     <span className="flex items-center gap-1">
                       <Users className="h-3 w-3" />
-                      {course.enrolledCount} alunos
+                      {course.enrolled_count} alunos
                     </span>
-                    {course.isFree && (
+                    {course.is_free && (
                       <Badge className="border-2 border-foreground bg-primary text-primary-foreground text-[10px] font-black">
                         GRÁTIS
                       </Badge>
@@ -101,7 +115,7 @@ export default function CoursesPage() {
                   <div className="border-t-2 border-foreground pt-3">
                     <div className="flex items-center justify-between">
                       <span className="font-black text-sm">
-                        {course.isFree
+                        {course.is_free
                           ? "GRATUITO"
                           : course.price
                             ? `R$ ${course.price.toFixed(2)}`

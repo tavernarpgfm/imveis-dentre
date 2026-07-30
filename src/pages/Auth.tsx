@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/input-otp";
 
 import { useAuth } from "@/hooks/use-auth";
-import logo from "@/assets/logo.svg";
 import {
   ArrowRight,
   Award,
@@ -28,6 +27,7 @@ import {
 } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { usersService } from "@/lib/supabase-service";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -44,7 +44,7 @@ function resolveRedirectAfterAuth(
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
-  const { isLoading: authLoading, isAuthenticated, user, signIn } = useAuth();
+  const { isLoading: authLoading, isAuthenticated, user, signIn, verifyOtp, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = resolveRedirectAfterAuth(
@@ -59,8 +59,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      if (user?.role) {
-        navigate(redirect);
+      if (user?.role && user.role !== "student") {
+        navigate(redirect, { replace: true });
       } else if (step !== "role") {
         setStep("role");
       }
@@ -75,9 +75,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       const formData = new FormData(event.currentTarget);
       const emailValue = formData.get("email") as string;
       setEmail(emailValue);
-      await signIn("email-otp", formData);
+      await signIn(emailValue);
       setStep("otp");
-      setIsLoading(false);
     } catch (error) {
       console.error("Email sign-in error:", error);
       setError(
@@ -85,6 +84,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           ? error.message
           : "Failed to send verification code. Please try again.",
       );
+    } finally {
       setIsLoading(false);
     }
   };
@@ -94,14 +94,28 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setIsLoading(true);
     setError(null);
     try {
-      const formData = new FormData(event.currentTarget);
-      await signIn("email-otp", formData);
-      setIsLoading(false);
+      await verifyOtp(email, otp);
     } catch (error) {
       console.error("OTP verification error:", error);
       setError("The verification code you entered is incorrect.");
-      setIsLoading(false);
       setOtp("");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRoleSelect = async (selectedRole: string) => {
+    setIsLoading(true);
+    try {
+      if (user) {
+        await usersService.updateUserRole(user.id, selectedRole as any);
+        navigate(redirect, { replace: true });
+      }
+    } catch (error) {
+      console.error("Role selection error:", error);
+      navigate(redirect, { replace: true });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -109,10 +123,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setIsLoading(true);
     setError(null);
     try {
-      await signIn("anonymous");
+      // Just navigate to auth with a guest-like experience
+      // For now, prompt user to sign in with email
+      setError("Por favor, faça login com seu email para continuar.");
     } catch (error) {
       console.error("Guest login error:", error);
-      setError(`Failed to sign in as guest: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setError(`Failed to sign in: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -159,15 +176,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 key={option.role}
                 type="button"
                 className="w-full flex items-center gap-4 border-3 border-foreground p-4 bg-background hover:shadow-[3px_3px_0px_0px] hover:shadow-foreground transition-all text-left"
-                onClick={async () => {
-                  setIsLoading(true);
-                  try {
-                    // User will select role via a mutation after auth
-                    navigate("/dashboard");
-                  } catch {
-                    setIsLoading(false);
-                  }
-                }}
+                onClick={() => handleRoleSelect(option.role)}
+                disabled={isLoading}
               >
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center border-2 border-foreground bg-primary/10">
                   <option.icon className="h-6 w-6 text-primary" />
@@ -318,9 +328,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               </CardHeader>
               <form onSubmit={handleOtpSubmit}>
                 <CardContent className="pt-6">
-                  <input type="hidden" name="email" value={email} />
-                  <input type="hidden" name="code" value={otp} />
-
                   <div className="flex justify-center">
                     <InputOTP
                       value={otp}

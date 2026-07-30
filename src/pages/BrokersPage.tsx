@@ -1,37 +1,50 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
   ArrowLeft,
   LogOut,
-  MapPin,
   Search,
   Star,
   Users,
 } from "lucide-react";
-import { useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { brokersService } from "@/lib/supabase-service";
+import type { BrokerRow } from "@/lib/supabase-service";
 
 export default function BrokersPage() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
-  const availableBrokers = useQuery(api.brokers.listAvailableBrokers, {});
+  const [availableBrokers, setAvailableBrokers] = useState<BrokerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadBrokers() {
+      try {
+        const data = await brokersService.listAvailableBrokers({});
+        setAvailableBrokers(data);
+      } catch (err) {
+        console.error("Error loading brokers:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadBrokers();
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
 
-  const filteredBrokers = availableBrokers?.filter((b) => {
+  const filteredBrokers = availableBrokers.filter((b) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
-      b.creciNumber.toLowerCase().includes(term) ||
+      b.creci_number.toLowerCase().includes(term) ||
       b.specialization?.toLowerCase().includes(term)
     );
   });
@@ -87,20 +100,20 @@ export default function BrokersPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          {filteredBrokers && filteredBrokers.length > 0 ? (
+          {filteredBrokers.length > 0 ? (
             filteredBrokers.map((broker) => (
               <div
-                key={broker._id}
+                key={broker.id}
                 className="border-3 border-foreground bg-card p-5 shadow-[3px_3px_0px_0px] shadow-foreground hover:shadow-[5px_5px_0px_0px] hover:shadow-foreground transition-shadow"
               >
                 <div className="flex items-start gap-4">
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center border-3 border-foreground bg-primary/10 text-primary font-black text-lg">
-                    {broker.creciNumber.slice(0, 2)}
+                    {broker.creci_number.slice(0, 2)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <h3 className="font-black text-sm">
-                        CRECI: {broker.creciNumber}/{broker.creciState}
+                        CRECI: {broker.creci_number}/{broker.creci_state}
                       </h3>
                       <Badge className="border-2 border-foreground bg-primary text-primary-foreground text-[10px] font-black">
                         DISPONÍVEL
@@ -118,7 +131,7 @@ export default function BrokersPage() {
                       </span>
                       <span className="flex items-center gap-1">
                         <Users className="h-3 w-3 text-primary" />
-                        {broker.completedCourses} cursos
+                        {broker.completed_courses} cursos
                       </span>
                     </div>
                   </div>

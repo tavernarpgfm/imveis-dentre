@@ -11,23 +11,46 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
   ArrowLeft,
-  CheckCircle2,
+  Loader2,
   LogOut,
   Save,
 } from "lucide-react";
-import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { profilesService, brokersService, companiesService } from "@/lib/supabase-service";
+import type { BrokerRow, CompanyRow, ProfileRow } from "@/lib/supabase-service";
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const profile = useQuery(api.profiles.getMyProfile);
-  const myBroker = useQuery(api.brokers.getMyBrokerProfile);
-  const myCompany = useQuery(api.companies.getMyCompany);
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [myBroker, setMyBroker] = useState<BrokerRow | null>(null);
+  const [myCompany, setMyCompany] = useState<CompanyRow | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [prof, broker, company] = await Promise.all([
+          profilesService.getMyProfile(),
+          brokersService.getMyBrokerProfile(),
+          companiesService.getMyCompany(),
+        ]);
+        setProfile(prof);
+        setMyBroker(broker);
+        setMyCompany(company);
+      } catch (err) {
+        console.error("Error loading settings:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -124,8 +147,14 @@ export default function SettingsPage() {
                 </div>
               )}
               <Button className="neobrutal-btn text-xs">
-                <Save className="h-4 w-4 mr-1" />
-                SALVAR ALTERAÇÕES
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-1" />
+                    SALVAR ALTERAÇÕES
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -145,7 +174,7 @@ export default function SettingsPage() {
                       CRECI
                     </Label>
                     <Input
-                      defaultValue={myBroker.creciNumber}
+                      defaultValue={myBroker.creci_number}
                       className="neobrutal-input"
                       disabled
                     />
@@ -155,7 +184,7 @@ export default function SettingsPage() {
                       Estado CRECI
                     </Label>
                     <Input
-                      defaultValue={myBroker.creciState}
+                      defaultValue={myBroker.creci_state}
                       className="neobrutal-input"
                       disabled
                     />
@@ -194,7 +223,7 @@ export default function SettingsPage() {
                       Nome da Empresa
                     </Label>
                     <Input
-                      defaultValue={myCompany?.companyName || ""}
+                      defaultValue={myCompany?.company_name || ""}
                       className="neobrutal-input"
                       placeholder="Nome da empresa"
                     />
@@ -215,7 +244,7 @@ export default function SettingsPage() {
                     Tipo de Empresa
                   </Label>
                   <Select
-                    defaultValue={myCompany?.companyType || "real_estate"}
+                    defaultValue={myCompany?.company_type || "real_estate"}
                   >
                     <SelectTrigger className="neobrutal-input">
                       <SelectValue />

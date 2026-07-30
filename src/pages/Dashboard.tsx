@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import {
   Award,
@@ -20,18 +19,47 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { brokersService, companiesService, coursesService, enrollmentsService, profilesService } from "@/lib/supabase-service";
+import type { BrokerRow, CompanyRow, CourseRow, EnrollmentRow, ProfileRow } from "@/lib/supabase-service";
 
 export default function Dashboard() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const profile = useQuery(api.profiles.getMyProfile);
-  const myBroker = useQuery(api.brokers.getMyBrokerProfile);
-  const myCompany = useQuery(api.companies.getMyCompany);
-  const myEnrollments = useQuery(api.enrollments.getMyEnrollments);
-  const myCourses = useQuery(api.courses.listCourses, {});
-  const availableBrokers = useQuery(api.brokers.listAvailableBrokers, {});
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [myBroker, setMyBroker] = useState<BrokerRow | null>(null);
+  const [myCompany, setMyCompany] = useState<CompanyRow | null>(null);
+  const [myEnrollments, setMyEnrollments] = useState<EnrollmentRow[]>([]);
+  const [myCourses, setMyCourses] = useState<CourseRow[]>([]);
+  const [availableBrokers, setAvailableBrokers] = useState<BrokerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [prof, broker, company, enrollments, courses, brokers] = await Promise.all([
+          profilesService.getMyProfile(),
+          brokersService.getMyBrokerProfile(),
+          companiesService.getMyCompany(),
+          enrollmentsService.getMyEnrollments(),
+          coursesService.listCourses({}),
+          brokersService.listAvailableBrokers({}),
+        ]);
+        setProfile(prof);
+        setMyBroker(broker);
+        setMyCompany(company);
+        setMyEnrollments(enrollments);
+        setMyCourses(courses);
+        setAvailableBrokers(brokers);
+      } catch (err) {
+        console.error("Error loading dashboard data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -105,7 +133,7 @@ export default function Dashboard() {
                 <BookOpen className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-black">{myEnrollments?.length || 0}</p>
+                <p className="text-2xl font-black">{myEnrollments.length || 0}</p>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   {role === "company" ? "Candidatos" : "Cursos"}
                 </p>
@@ -118,7 +146,7 @@ export default function Dashboard() {
                 <Award className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-black">{myBroker?.completedCourses || 0}</p>
+                <p className="text-2xl font-black">{myBroker?.completed_courses || 0}</p>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   Certificações
                 </p>
@@ -144,7 +172,7 @@ export default function Dashboard() {
                 <TrendingUp className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-black">{myCourses?.length || 0}</p>
+                <p className="text-2xl font-black">{myCourses.length || 0}</p>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   {role === "company" ? "Disponíveis" : "Disponíveis"}
                 </p>
@@ -204,16 +232,16 @@ export default function Dashboard() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {myEnrollments && myEnrollments.length > 0 ? (
+                    {myEnrollments.length > 0 ? (
                       <div className="space-y-3">
                         {myEnrollments.slice(0, 3).map((enrollment) => (
                           <div
-                            key={enrollment._id}
+                            key={enrollment.id}
                             className="flex items-center justify-between border-2 border-foreground p-3"
                           >
                             <div>
                               <p className="text-sm font-bold">
-                                Curso #{enrollment.courseId.slice(-6)}
+                                Curso #{enrollment.course_id.slice(-6)}
                               </p>
                               <div className="mt-1 h-2 bg-muted border-2 border-foreground">
                                 <div
@@ -258,9 +286,9 @@ export default function Dashboard() {
                   <CardContent className="space-y-3">
                     {[
                       { text: "Complete seu perfil", done: !!profile },
-                      { text: "Faça um curso", done: (myEnrollments?.length || 0) > 0 },
-                      { text: "Obtenha certificação", done: (myBroker?.completedCourses || 0) > 0 },
-                      { text: "Fique disponível para o mercado", done: !!myBroker?.availableForMarket },
+                      { text: "Faça um curso", done: myEnrollments.length > 0 },
+                      { text: "Obtenha certificação", done: (myBroker?.completed_courses || 0) > 0 },
+                      { text: "Fique disponível para o mercado", done: !!myBroker?.available_for_market },
                     ].map((step) => (
                       <div
                         key={step.text}
@@ -278,7 +306,7 @@ export default function Dashboard() {
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
                           ) : (
-                            <span className="text-xs font-black">{myEnrollments?.length || 0}</span>
+                            <span className="text-xs font-black">{myEnrollments.length}</span>
                           )}
                         </div>
                         <span className="text-sm font-bold">{step.text}</span>
@@ -302,24 +330,24 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-bold text-sm">
-                        {myBroker.availableForMarket
+                        {myBroker.available_for_market
                           ? "Você está visível para empresas"
                           : "Você não está visível para empresas"}
                       </p>
                       <p className="text-xs text-muted-foreground font-bold">
-                        {myBroker.availableForMarket
+                        {myBroker.available_for_market
                           ? "Empresas podem encontrar seu perfil"
                           : "Ative para receber oportunidades"}
                       </p>
                     </div>
                     <Badge
                       className={`border-2 border-foreground font-black text-xs ${
-                        myBroker.availableForMarket
+                        myBroker.available_for_market
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      {myBroker.availableForMarket ? "DISPONÍVEL" : "INDISPONÍVEL"}
+                      {myBroker.available_for_market ? "DISPONÍVEL" : "INDISPONÍVEL"}
                     </Badge>
                   </div>
                 </CardContent>
@@ -338,7 +366,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-black text-primary">
-                      {availableBrokers?.length || 0}
+                      {availableBrokers.length || 0}
                     </p>
                     <p className="text-xs font-bold text-muted-foreground uppercase mt-1">
                       Profissionais certificados
@@ -363,11 +391,11 @@ export default function Dashboard() {
                   <CardContent>
                     {myCompany ? (
                       <div className="space-y-2">
-                        <p className="font-bold text-sm">{myCompany.companyName}</p>
+                        <p className="font-bold text-sm">{myCompany.company_name}</p>
                         <Badge className="border-2 border-foreground bg-accent text-accent-foreground text-[10px] font-black">
-                          {myCompany.companyType === "real_estate"
+                          {myCompany.company_type === "real_estate"
                             ? "IMOBILIÁRIA"
-                            : myCompany.companyType === "construction"
+                            : myCompany.company_type === "construction"
                               ? "CONSTRUTORA"
                               : "INCORPORADORA"}
                         </Badge>
@@ -412,7 +440,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-black text-primary">
-                      {myCourses?.length || 0}
+                      {myCourses.length || 0}
                     </p>
                     <p className="text-xs font-bold text-muted-foreground uppercase mt-1">
                       Cursos ativos
@@ -425,7 +453,7 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-black text-primary">
-                      {availableBrokers?.length || 0}
+                      {availableBrokers.length || 0}
                     </p>
                     <p className="text-xs font-bold text-muted-foreground uppercase mt-1">
                       Certificados disponíveis
@@ -449,17 +477,17 @@ export default function Dashboard() {
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {myCourses && myCourses.length > 0 ? (
+                  {myCourses.length > 0 ? (
                     <div className="space-y-3">
                       {myCourses.slice(0, 3).map((course) => (
                         <div
-                          key={course._id}
+                          key={course.id}
                           className="flex items-center justify-between border-2 border-foreground p-3"
                         >
                           <div>
                             <p className="text-sm font-bold">{course.title}</p>
                             <p className="text-xs text-muted-foreground font-bold">
-                              {course.enrolledCount} alunos • {course.durationHours}h
+                              {course.enrolled_count} alunos • {course.duration_hours}h
                             </p>
                           </div>
                           <Badge className="border-2 border-foreground text-[10px] font-black">
@@ -488,11 +516,11 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {myCourses && myCourses.length > 0 ? (
+                {myCourses.length > 0 ? (
                   <div className="grid gap-4 md:grid-cols-2">
                     {myCourses.map((course) => (
                       <div
-                        key={course._id}
+                        key={course.id}
                         className="border-2 border-foreground p-4 hover:shadow-[3px_3px_0px_0px] hover:shadow-foreground transition-shadow"
                       >
                         <div className="h-2 bg-primary mb-3" />
@@ -511,7 +539,7 @@ export default function Dashboard() {
                                 : "AVANÇADO"}
                           </Badge>
                           <span className="text-xs font-bold text-muted-foreground">
-                            {course.enrolledCount} alunos
+                            {course.enrolled_count} alunos
                           </span>
                         </div>
                       </div>
@@ -549,29 +577,29 @@ export default function Dashboard() {
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  {availableBrokers && availableBrokers.length > 0 ? (
+                  {availableBrokers.length > 0 ? (
                     <div className="space-y-3">
                       {availableBrokers.slice(0, 5).map((broker) => (
                         <div
-                          key={broker._id}
+                          key={broker.id}
                           className="flex items-center justify-between border-2 border-foreground p-3"
                         >
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 items-center justify-center border-2 border-foreground bg-primary/10 text-primary font-black text-sm">
-                              {broker.creciNumber.slice(0, 2)}
+                              {broker.creci_number.slice(0, 2)}
                             </div>
                             <div>
                               <p className="text-sm font-bold">
-                                CRECI: {broker.creciNumber}
+                                CRECI: {broker.creci_number}
                               </p>
                               <p className="text-xs text-muted-foreground font-bold">
-                                {broker.specialization || "Sem especialização"} • {broker.completedCourses} cursos
+                                {broker.specialization || "Sem especialização"}
                               </p>
                             </div>
                           </div>
-                          <Button className="neobrutal-btn-secondary text-[10px] px-3 py-1 h-auto">
-                            VER PERFIL
-                          </Button>
+                          <Badge className="border-2 border-foreground bg-primary text-primary-foreground text-[10px] font-black">
+                            {broker.rating?.toFixed(1) || "—"}
+                          </Badge>
                         </div>
                       ))}
                     </div>
@@ -581,6 +609,12 @@ export default function Dashboard() {
                       <p className="text-sm font-bold text-muted-foreground">
                         Nenhum corretor disponível no momento
                       </p>
+                      <Button
+                        className="neobrutal-btn mt-4 text-xs"
+                        onClick={() => navigate("/brokers")}
+                      >
+                        VER TODOS OS CORRETORES
+                      </Button>
                     </div>
                   )}
                 </CardContent>
